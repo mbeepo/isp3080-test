@@ -6,14 +6,20 @@ use panic_semihosting as _;
 use cortex_m_rt::entry;
 use embedded_hal::{delay::DelayNs, digital::OutputPin};
 use nrf52833_hal::{
-    gpio::{p0, p1, Level},
-    pac::{CorePeripherals, Peripherals}, Delay,
+    gpio::{p0, p1, Level}, pac::{CorePeripherals, Peripherals}, usbd::{UsbPeripheral, Usbd}, Clocks, Delay
 };
+use usb_device::{bus::UsbBusAllocator, device::{StringDescriptors, UsbDeviceBuilder, UsbVidPid}};
+use usbd_serial::{embedded_io::Write, SerialPort};
+
+const USB_VENDORID: u16 = 0xBABA;
+const USB_PRODUCTID: u16 = 0xAAAA;
 
 #[entry]
 fn main() -> ! {
     let core_peripherals = CorePeripherals::take().unwrap();
     let peripherals = Peripherals::take().unwrap();
+    let clocks = Clocks::new(peripherals.CLOCK);
+    let clocks = clocks.enable_ext_hfosc();
 
     let p0 = p0::Parts::new(peripherals.P0);
     let p1 = p1::Parts::new(peripherals.P1);
@@ -67,14 +73,54 @@ fn main() -> ! {
         p94.degrade(),
     ].map(|x| x.into_push_pull_output(Level::Low));
 
+    let usb_bus = UsbBusAllocator::new(Usbd::new(UsbPeripheral::new(peripherals.USBD, &clocks)));
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(USB_VENDORID, USB_PRODUCTID))
+        .strings(&[StringDescriptors::default()
+            .manufacturer("Beepo")
+            .product("Serial port")
+            .serial_number("BABAWAWA")])
+        .unwrap()
+        .device_class(0xFF)
+        .max_packet_size_0(8)
+        .unwrap()
+        .build();
+    let mut serial = SerialPort::new(&usb_bus);
+    let mut test_step = 0;
+
     loop {
-        for pin in &mut isp3080_nrf_pins {
-            pin.set_high().unwrap();
+        if !usb_dev.poll(&mut [&mut serial]) {
+            continue;
         }
-        delay.delay_ms(1000);
-        for pin in &mut isp3080_nrf_pins {
-            pin.set_low().unwrap();
+
+        match test_step {
+            0 => {
+                // hehe
+                serial.write_all(b"[START] Test USB").unwrap();
+                serial.write_all(b"[FINISH] Test USB").unwrap();
+            }
+            1 => {
+                serial.write_all(b"[START] Test GPIO (HIGH, wait 1s, LOW)").unwrap();
+                for pin in &mut isp3080_nrf_pins {
+                    pin.set_high().unwrap();
+                }
+
+                // we might need to poll USB during this to avoid being declared dead but im not entirely sure
+                delay.delay_ms(1000);
+
+                for pin in &mut isp3080_nrf_pins {
+                    pin.set_low().unwrap();
+                }
+                serial.write_all(b"[FINISH] Test GPIO").unwrap();
+            }
+            2 => {
+
+            }
+            _ => {
+                serial.write_all(b"-- All tests complete --").unwrap();
+                loop {}
+            }
         }
-        delay.delay_ms(1000);
+
+        test_step += 1;
     }
 }
