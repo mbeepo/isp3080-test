@@ -12,8 +12,10 @@ embassy-nrf = { version = "0.3.1", features = [ "defmt", "nrf52833", "unstable-p
 embassy-sync = { version = "0.6.2", features = [ "defmt" ] }
 embassy-time = { version = "0.4.0", features = [ "defmt", "defmt-timestamp-uptime" ] }
 embassy-usb = { version = "0.4.0", features = [ "defmt" ] }
+embassy-usb-logger = "0.4.0"
 embedded-hal = "1.0.0"
 embedded-hal-async = "1.0.0"
+log = "0.4.27"
 nrf52833-hal = "0.18.0"
 panic-semihosting = "0.6.0"
 static_cell = "2.1.0"
